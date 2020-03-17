@@ -38,29 +38,45 @@ args_plot = {
 }
 
 ############### CODE ###################
-
-J = 1
-V = 0.5*1e-3
-N_s = [0,9,10,11,24,25,26,49,50,51]
-Nx = 51
-
-sites_dic = Fun_OL.lattice_1D(Nx)
-case = ['IT','Harmonic','Isotropic']
-
+N_s = [25,26,49,50,51]
+k = 0
 for N in N_s:
+
 	start = time.time()
 
-	system = [sites_dic,J,N,V,Nx]
+	args_syst = {
+	'J' : 1,
+	'N' : N, # N=0 actually means g = 0 
+	'V' : 0.5*1e-3,
+	'Nx' : 51,
+	'U' : 0.01,
+	'Method' : 'IT',
+	'Trap' : 'Harmonic',
+	'Symm' : 'Isotropic',
+	}
 
-	## lowest state without int. = gaussian as initial state
+	args_syst.update({'sites_dic' : Fun_OL.lattice_1D(args_syst)})
 
-	H_KV = Fun_OL.H_1D(system,case)
+	## Kinetic + Trap part of Hamiltonian
+	H_KV = Fun_OL.H_1D(args_syst)
 
-	mu_all,n0,E_funct_IT = Fun_OL.density(case,system,H_KV)
+	if k<=1:
+		args_init = {
+		'H_KV' : H_KV,
+		'dt' : 5*1e-3,
+		'err_IT' : 1e-9
+		}
 
-	data = [system,mu_all,n0,H_KV,E_funct_IT]
+	else:
+		args_init.update({'psi_int' : psi0})
+	
+	mu_all,psi0,E_funct_IT = Fun_OL.calc_psi0(args_syst,args_init)
+
+	data = [args_syst,args_init,mu_all,psi0,E_funct_IT]
 	dataID = '1D_%s_%s_%s_Nx_%.1i_J_%.2f_N_%.1i_V_%.4f' %\
-			(case[0],case[1],case[2],Nx,system[1],system[2],system[3])
+			(args_syst['Method'],args_syst['Trap'],args_syst['Symm'],\
+			args_syst['Nx'],args_syst['J'],N,args_syst['V'])
 	np.save('Datas/'+dataID+'.npy',data)
 
 	print("Execution time:",time.time()-start,"secondes")
+	k += 1

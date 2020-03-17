@@ -57,9 +57,6 @@ for N in N_s:
 
 	E_funct_IT_s = np.append(E_funct_IT_s,E_funct_IT)
 
-print("The angular coefficient of E ~ N is",\
-	(E_funct_IT_s[-1]-E_funct_IT_s[-2]).real/(N_s[-1]-N_s[-2]))
-
 # Save the figure
 
 ax1.grid(axis='both')

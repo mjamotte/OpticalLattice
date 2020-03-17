@@ -126,129 +126,139 @@ def honey_hopping(n1,n2,system,delta_link):
 	return hop
 
 
-def density(case,system,H_KV):
+def calc_psi0(args_syst,args_init):
 
-	if case[0]=='SC': #SC = self-consistent method
-		E0,psi_0,E0_all,psi0_all,E_funct_SC = solveGP_SC(case,system,H_KV)
-		return E0,abs(psi_0)**2,E0_all,abs(psi0_all)**2,E_funct_SC
+	if args_syst['Method']=='SC': #SC = self-consistent method
+		E0_all,psi0_all,E_funct_SC = solveGP_SC(args_syst,args_init)
+		return E0_all,psi0_all,E_funct_SC
 
-	elif case[0]=='IT': #Imaginary time
-		mu_all,psi0,E_funct_IT = solve_GP_IT(case,system,H_KV)
-		return mu_all,abs(psi0)**2,E_funct_IT
+	elif args_syst['Method']=='IT': #Imaginary time
+		mu_all,psi0,E_funct_IT = solve_GP_IT(args_syst,args_init)
+		return mu_all,psi0,E_funct_IT
 
 
-def solveGP_SC(case,system,H_KV):
+def solveGP_SC(args_syst,args_init):
 
-	N = system[2]
+	N = args_syst['N']
+	H_KV = args_init['H_KV']
+	err = args_init['err_SC'] # condition to stop convergence
 	E_funct = np.array([])
+
+	
 	E0_all = [np.zeros(len(H_KV))] # to observe convergence of the lowest energy
 	psi0_all = [np.array([])]
 	#H_KV = sc.sparse.coo_matrix(H_KV) # KV = Kinetic + Trap	
 
 	#E0_temp1,eigVecs = sc.sparse.linalg.eigsh(H_KV,which='SA',k=1)
-	E0_temp1,eigVecs = linalg.eigh(H_KV)
-	psi0_temp = np.matrix.transpose(eigVecs[:,0])
+	E0_old,eigVecs = linalg.eigh(H_KV)
+	psi_old = np.matrix.transpose(eigVecs[:,0])
 	#psi0_temp = impose_sym(psi0_temp)
 
-	E0_all = [E0_temp1]
-	psi0_all = np.append(psi0_all,psi0_temp)
+	E0_all = [E0_old]
+	#psi0_all = np.append(psi0_all,psi0_temp)
 
 	counterSC = 0
 	lam = 1/(10*N+1) # to avoid oscillations in energy that slow down the code
-	flag = 0
-	err = 1e-10
+	#flag = 0
 
 	while True:
 
 		#H_U = sc.sparse.coo_matrix(0.5*U*np.diag(np.abs(psi0_temp)**2))
 		#E0_temp2,eigVecs = sc.sparse.linalg.eigsh(H_KV+H_U,which='SA',k=1)
-		H_U = H_int(N,psi0_temp)
-		E0_temp2,eigVecs = linalg.eigh(H_KV+H_U)
-		psi0_temp1 = np.matrix.transpose(eigVecs[:,0])
-		#psi0_temp1 = impose_sym(psi0_temp1)
+		H_U = H_int(psi_old,args_syst)
+		E0_new,eigVecs = linalg.eigh(H_KV+H_U)
+		psi_new = np.matrix.transpose(eigVecs[:,0])
 
-		psi0_lam = np.sqrt((1-lam)*psi0_temp**2 + lam*psi0_temp1**2)
+		psi_lam = np.sqrt((1-lam)*psi_old**2 + lam*psi_new**2)
 
-		E_funct = np.append(E_funct,energy_functional(psi0_lam,system,case,E0_temp2[0]))
+		#if len(E_funct)>2:
+		#	if E_funct[-1]>E_funct[-2] and flag==0:
+		#		flag = 1
+		#		print('Energy functional is not decreasing')
 
-		if len(E_funct)>2:
-			if E_funct[-1]>E_funct[-2] and flag==0:
-				flag = 1
-				print('Energy functional is not decreasing')
-
-		E0_all = np.append(E0_all,[E0_temp2],axis=0)
-		psi_all = np.append(psi0_all,psi0_lam,axis=0)
+		E0_all = np.append(E0_all,[E0_new],axis=0)
+		#psi_all = np.append(psi0_all,psi0_lam,axis=0)
 
 		#if abs((E0_temp1[0]-E0_temp2[0])/E0_temp1[0])<err:
-		if np.sum(abs(np.abs(psi0_temp)**2-np.abs(psi0_lam)**2))<err:
+		if np.sum(abs(np.abs(psi_old)**2-np.abs(psi_lam)**2))<err:
 			break
 
-		psi0_temp = psi0_lam
-		#E0_temp1 = E0_temp2
+		psi_old = psi_lam
+		E0_old = E0_new
 		counterSC += 1			
 
 	print('Number of iterations of self-consistent method =',counterSC)
-	return E0_temp2,psi0_temp,E0_all,psi_all,E_funct
+	E_funct = energy_functional(psi_lam,args_syst)
+
+	return E0_all,psi_lam,E_funct #,psi_all
 
 
-def H_int(N,psi):
-	g = 1e-2
-	return g*N*np.diag(np.abs(psi)**2)
+def H_int(psi,args_syst):
+	U = args_syst['U']
+	N = args_syst['N']
 
-def energy_functional(psi,system,case,mu):
+	return U*N*np.diag(np.abs(psi)**2)
 
-	J = system[1]
-	N = system[2]
-	V0 = system[3]
-	Nx = system[4]
-	g = 0.01
+def energy_functional(psi,args_syst):
 
-	E_U = g*N/2*np.sum(np.abs(psi)**4)-g*N/2
-	E_trap = np.sum(trap_1D(system,case)*abs(psi)**2)
+	J = args_syst['J']
+	N = args_syst['N']
+	V = args_syst['V']
+	U = args_syst['U']
+	Nx = args_syst['Nx']
+
+	E_U = U*N/2*np.sum(np.abs(psi)**4) # -U/2 let it for small systems
+	E_trap = np.sum(trap_1D(args_syst)*abs(psi)**2)
 	
 	positions = np.arange(Nx-1) # -1 because of the k+1 below
 	E_kin = 0
 	for k in positions:
 		E_kin += -J*np.conj(psi[k])*psi[k+1]-J*np.conj(psi[k+1])*psi[k]
 
-	return E_U+E_trap+E_kin#-mu*N # = <H>/N
+	return (E_U+E_trap+E_kin)*N
 
-#@jit
-def GP(t,psi_old,system,H_KV):
 
-	N = system[2]
+def GP(t,psi_old,args_syst,args_init):
+
+	H_KV = args_init['H_KV']
+	N = args_syst['N']
 	dim = len(psi_old)
 	psi_old_co = psi_old[:int(dim/2)] + 1j*psi_old[int(dim/2):]
 
 	# Hopping part + trap part of the GP
 	y1 = H_KV.dot(psi_old_co)
 	# Interacting part of the GP
-	y2 = H_int(N,psi_old_co).dot(psi_old_co)
+	y2 = H_int(psi_old_co,args_syst).dot(psi_old_co)
 
 	y = y1 + y2
 	# -d_tau psi(tau) = H psi(tau)
 	y = -y
 	return np.concatenate((np.real(y),np.imag(y)))
 
-def solve_GP_IT(case,system,H_KV):
 
-	############# DEBUGGER PART ##############
+def solve_GP_IT(args_syst,args_init):
 
-	gauss = linalg.eigh(H_KV)[1][:,0]
-	psi_old = np.concatenate((np.real(gauss), np.imag(gauss)))
+	## Initialisation 
+	if 'psi0' in args_init:
+		psi_old = args_init['psi0'] 
+		psi_old = np.concatenate((np.real(psi_old), np.imag(psi_old)))
+
+	else:
+		H_KV = args_init['H_KV']
+		gauss = linalg.eigh(H_KV)[1][:,0]
+		psi_old = np.concatenate((np.real(gauss), np.imag(gauss)))
 
 	## parameters for set_integrator and GP
 	tol = 1e-9 # tolerance
 	nsteps = np.iinfo(np.int32).max
 	solver = ode(GP)
-	solver.set_f_params(system,H_KV) # parameters needed in GP_t_real
+	solver.set_f_params(args_syst,args_init) # parameters needed in GP_t_real
 	solver.set_integrator('dop853', atol=tol, rtol=tol, nsteps=nsteps)
 
 	## Evolution
 	t = 0
-	dt = 0.005
-	half_len = int(len(gauss)/2)
-	err = 1e-9
+	dt = args_init['dt']
+	err = args_init['err_IT']
 	counterIT = 0
 	dim = len(psi_old)
 	#mu_old = 0
@@ -299,14 +309,13 @@ def solve_GP_IT(case,system,H_KV):
 		sol = sol/np.sqrt(sum(abs(sol)**2))
 		sol_re = sol[:int(dim/2)]
 		sol_im = sol[int(dim/2):]
-		sol_co = sol_re + 1j*sol_im
-		n0 = abs(sol_co)**2
+		psi0 = sol_re + 1j*sol_im
 
-		E_funct_IT = energy_functional(sol_co,system,case,mu_new)
+		E_funct_IT = energy_functional(psi0,args_syst)
 
 	print('The number of iterations for IT =', counterIT)
 
-	return mu_all,sol_co,E_funct_IT
+	return mu_all,psi0,E_funct_IT
 
 
 def impose_sym(vector): 
@@ -337,7 +346,8 @@ def dEdN_O2(E,dN):
 	aquire feelings with correlated hoppings. 
 '''
 
-def lattice_1D(Nx):
+def lattice_1D(args_syst):
+	Nx = args_syst['Nx']
 
 	sites_dic = {}
 	n = 0
@@ -349,10 +359,10 @@ def lattice_1D(Nx):
 
 	return 	
 
-def trap_1D(system,case):
+def trap_1D(args_syst):
 
-	V0 = system[3]
-	Nx = system[4]
+	V0 = args_syst['V']
+	Nx = args_syst['Nx']
 
 	V = np.zeros(Nx)
 
@@ -362,17 +372,17 @@ def trap_1D(system,case):
 	return V
 
 
-def H_1D(system,case):
+def H_1D(args_syst):
 
-	J = system[1]
-	Nx = system[4]
+	J = args_syst['J']
+	Nx = args_syst['Nx']
 
 	H = 1j*np.zeros((Nx,Nx))
 
-	if case[2]=='Isotropic':
+	if args_syst['Symm']=='Isotropic':
 
-		if case[1]=='Harmonic':
-			H = np.diag(trap_1D(system,case))
+		if args_syst['Trap']=='Harmonic':
+			H = np.diag(trap_1D(args_syst))
 
 		for i in range(Nx-1):
 			H[i,i+1] = -J
