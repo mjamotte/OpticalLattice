@@ -21,9 +21,9 @@ in minimizing E-mu*N
 
 J = 1
 N_s = [0,10,25,50] # N=0 actually means g = 0
-V0 = 0.5*1e-4
-Nx = 201
-case = ['SC','Harmonic','Isotropic']
+V0 = 0.5*1e-3
+Nx = 51
+case = ['IT','Harmonic','Isotropic']
 
 # Figure
 
@@ -34,10 +34,10 @@ ax2 = pyplot.subplot(122)
 #ax1.set_xlabel('Iterations for conv.')
 ax1.set_xlabel('N')
 ax1.set_ylabel('$E$')
-ax2.set_ylabel('$E$')
+ax2.set_ylabel('$mu$')
 ax2.set_xlabel('iterat. for conv.')#,color='r')
 
-E_funct_SC_s = np.array([])
+E_funct_IT_s = np.array([])
 
 for N in N_s:
 
@@ -46,24 +46,19 @@ for N in N_s:
 			 	(case[0],case[1],case[2],Nx,J,N,V0)
 	data = np.load('Datas/'+temporary+'.npy',allow_pickle=True)
 	system = data[0]
-	E0 = data[1]
-	E0_all = data[3]	
-	H_KV = data[5]
-	print(linalg.eigh(H_KV)[0][0])
+	mu_all = data[1]	
+	H_KV = data[3]
+	E_funct_IT = data[4]
 
-	E_funct_SC = data[6]
+	ax1.plot(N,E_funct_IT.real,'go',label="$E[\psi]$")
+	#ax2.plot(np.arange(len(E_funct_IT)),E_funct_IT.real,'g.',label="$E[\psi]$")
+	for x in range(len(mu_all[0])):
+		pyplot.plot(np.arange(len(mu_all)),mu_all[:,x].real) # mu.imag is zero
 
-	eigVal_H_KV,eigVect_H_KV = np.linalg.eigh(H_KV)
-
-	ax1.plot(N,E0_all[-1,0],'ro',label="$\mu$") # mu if lowest energy of H_KV+H_U
-	ax1.plot(N,E_funct_SC[-1].real,'go',label="$E[\psi]$")
-	ax2.plot(np.arange(len(E0_all[:,0])-1),E0_all[1:,0],'r.',label="$\mu$")
-	ax2.plot(np.arange(len(E_funct_SC)),E_funct_SC.real,'g.',label="$E[\psi]$")
-
-	E_funct_SC_s = np.append(E_funct_SC_s,E_funct_SC[-1])
+	E_funct_IT_s = np.append(E_funct_IT_s,E_funct_IT)
 
 print("The angular coefficient of E ~ N is",\
-	(E_funct_SC_s[-1]-E_funct_SC_s[-2]).real/(N_s[-1]-N_s[-2]))
+	(E_funct_IT_s[-1]-E_funct_IT_s[-2]).real/(N_s[-1]-N_s[-2]))
 
 # Save the figure
 
@@ -76,3 +71,12 @@ pyplot.show()
 temp = '1D_Energies_Ns_%s_%s_%s_Nx_%.1i_J_%.3f_V_%.4f' %\
 		(case[0],case[1],case[2],Nx,J,V0)
 fig_OL1D.savefig("Figures_OL/fig_"+temp+".pdf")
+'''
+for x in range(len(mu_all[0])):
+	pyplot.plot(np.arange(len(mu_all)),mu_all[:,x].real) # mu.imag is zero
+
+pyplot.xlabel('Time')
+pyplot.ylabel('$\mu$')
+
+pyplot.show()
+'''

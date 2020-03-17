@@ -11,7 +11,7 @@ import time
 from mpl_toolkits import mplot3d
 from scipy.integrate import ode
 from numba import jit
-
+import debugger as bug
 ############# FUNCTIONS OPTICAL LATTICES #############
 
 '''
@@ -129,14 +129,12 @@ def honey_hopping(n1,n2,system,delta_link):
 def density(case,system,H_KV):
 
 	if case[0]=='SC': #SC = self-consistent method
-		E0,psi_0,E0_all,psi0_all,E_funct = solveGP_SC(case,system,H_KV)
-		out = np.array([E0,abs(psi_0)**2,E0_all,abs(psi0_all)**2,E_funct])
+		E0,psi_0,E0_all,psi0_all,E_funct_SC = solveGP_SC(case,system,H_KV)
+		return E0,abs(psi_0)**2,E0_all,abs(psi0_all)**2,E_funct_SC
 
 	elif case[0]=='IT': #Imaginary time
-		E_all,psi_all = solveGP_IT(case,system)
-		out = np.array([E_all,abs(psi_all)**2])
-	
-	return out
+		mu_all,psi0,E_funct_IT = solve_GP_IT(case,system,H_KV)
+		return mu_all,abs(psi0)**2,E_funct_IT
 
 
 def solveGP_SC(case,system,H_KV):
@@ -156,9 +154,9 @@ def solveGP_SC(case,system,H_KV):
 	psi0_all = np.append(psi0_all,psi0_temp)
 
 	counterSC = 0
-	lam = 1 #1/(10*N+1) # to avoid oscillations in energy that slow down the code
+	lam = 1/(10*N+1) # to avoid oscillations in energy that slow down the code
 	flag = 0
-	err = 1e-9
+	err = 1e-10
 
 	while True:
 
@@ -182,14 +180,14 @@ def solveGP_SC(case,system,H_KV):
 		psi_all = np.append(psi0_all,psi0_lam,axis=0)
 
 		#if abs((E0_temp1[0]-E0_temp2[0])/E0_temp1[0])<err:
-		if np.sum((np.abs(psi0_temp)**2-np.abs(psi0_lam)**2)**2)<err:
+		if np.sum(abs(np.abs(psi0_temp)**2-np.abs(psi0_lam)**2))<err:
 			break
 
 		psi0_temp = psi0_lam
-		E0_temp1 = E0_temp2
+		#E0_temp1 = E0_temp2
 		counterSC += 1			
 
-	print('Number of interations of self-consistent method =',counterSC)
+	print('Number of iterations of self-consistent method =',counterSC)
 	return E0_temp2,psi0_temp,E0_all,psi_all,E_funct
 
 
@@ -232,6 +230,84 @@ def GP(t,psi_old,system,H_KV):
 	y = -y
 	return np.concatenate((np.real(y),np.imag(y)))
 
+def solve_GP_IT(case,system,H_KV):
+
+	############# DEBUGGER PART ##############
+
+	gauss = linalg.eigh(H_KV)[1][:,0]
+	psi_old = np.concatenate((np.real(gauss), np.imag(gauss)))
+
+	## parameters for set_integrator and GP
+	tol = 1e-9 # tolerance
+	nsteps = np.iinfo(np.int32).max
+	solver = ode(GP)
+	solver.set_f_params(system,H_KV) # parameters needed in GP_t_real
+	solver.set_integrator('dop853', atol=tol, rtol=tol, nsteps=nsteps)
+
+	## Evolution
+	t = 0
+	dt = 0.005
+	half_len = int(len(gauss)/2)
+	err = 1e-9
+	counterIT = 0
+	dim = len(psi_old)
+	#mu_old = 0
+	flag = 0
+
+	while True:
+		## time evolution
+		solver.set_initial_value(psi_old, t)
+		solver.integrate(t+dt)
+		t = t+dt
+		psi_new = solver.y
+
+		## Compute mu
+		psi_old_co = psi_old[:int(dim/2)] + 1j*psi_old[int(dim/2):]
+		psi_new_co = psi_new[:int(dim/2)] + 1j*psi_new[int(dim/2):] # not renorm. yet
+		mu_new = -np.log(psi_new_co/psi_old_co)/dt
+
+		if flag==0:
+			mu_all = np.array([mu_new])
+			flag = 1
+		else:
+			mu_all = np.append(mu_all,np.array([mu_new]),axis=0)
+
+		## renormalize
+		psi_new = psi_new/np.sqrt(np.sum(abs(psi_new)**2))
+		psi_new_co = psi_new[:int(dim/2)] + 1j*psi_new[int(dim/2):]
+
+		# if debug==True:
+		# 	pyplot.figure(1)
+		# 	bug.debug_plot_vector(abs(psi_new_co)**2,args_plot)
+
+		# 	pyplot.figure(2)
+		# 	bug.debug_plot_vector(mu_all,args_plot)
+
+		err1 = np.sqrt(np.sum((abs(abs(psi_new_co)**2-abs(psi_old_co)**2)**2)))
+
+		#if abs(mu_old-mu_new)/abs(mu_new)<err:
+		if err1<err:
+			break
+
+		psi_old = psi_new
+
+		#mu_old = mu_new
+		counterIT += 1
+
+	if solver.successful():
+		sol = solver.y
+		sol = sol/np.sqrt(sum(abs(sol)**2))
+		sol_re = sol[:int(dim/2)]
+		sol_im = sol[int(dim/2):]
+		sol_co = sol_re + 1j*sol_im
+		n0 = abs(sol_co)**2
+
+		E_funct_IT = energy_functional(sol_co,system,case,mu_new)
+
+	print('The number of iterations for IT =', counterIT)
+
+	return mu_all,sol_co,E_funct_IT
+
 
 def impose_sym(vector): 
 # imposes symmetry from the middle of the vector
@@ -244,6 +320,13 @@ def impose_sym(vector):
 	norm = np.sqrt(np.sum(np.abs(vector)**2))
 	vector = vector/norm
 	return vector
+
+def dEdN_O2(E,dN):
+
+	dEdN = np.array([])
+	for i in range(int(len(E)/3)): # 3 = "order of approx"+1
+		dEdN = np.append(dEdN,(E[i*3+2]-E[i*3])/(2*dN))
+	return dEdN
 
 
 ############# 1D OPTICAL LATTICE #############

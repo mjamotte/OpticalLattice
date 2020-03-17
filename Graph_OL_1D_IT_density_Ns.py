@@ -14,9 +14,9 @@ import Fun_OL
 ########################## Graphics for OPTICAL LATTICE ##########################
 
 J = 1
-N_s = [0,10,15,20,25] # N=0 actually means g = 0
-V0 = 0.5*1e-5
-Nx = 201
+N_s = [0,10,25,50] # N=0 actually means g = 0
+V0 = 0.5*1e-3
+Nx = 51
 case = ['IT','Harmonic','Isotropic']
 
 # Figure
@@ -34,7 +34,7 @@ for N in N_s:
 	data = np.load('Datas/'+temporary+'.npy',allow_pickle=True)
 	system = data[0]
 	E0_all = data[1]
-	n0_all = data[2]
+	n0 = data[2]
 	H_KV = data[3]
 
 	eigVal_H_KV,eigVect_H_KV = np.linalg.eigh(H_KV)
@@ -58,12 +58,12 @@ for N in N_s:
 		half_pos = (positions-center)[half_len:]
 		ax2.plot(half_pos/sigma,Gauss[half_len:]**2/np.sum(Gauss**2),'-g')
 		ax2.plot(half_pos/sigma,dens[half_len:],'.b')
-		ax2.plot(half_pos/sigma,n0[half_len:].real,'-r',label="$U = {}$".format(U))
+		ax2.plot(half_pos/sigma,n0[half_len:].real,'-r',label="$N = {}$".format(N))
 
 	if centered=='False':
 		ax2.plot(positions/sigma,Gauss**2/np.sum(Gauss**2),'-g')
 		ax2.plot(positions/sigma,dens,'.b')
-		ax2.plot(positions/sigma,n0_all[:,-1].real,'-',label="$U = {}$".format(U))
+		ax2.plot(positions/sigma,n0.real,'-',label="$N = {}$".format(N))
 
 	#ax2.plot(np.arange(Nx),Trap/np.max(Trap))
 	ax2.legend(loc=1);
@@ -76,3 +76,11 @@ pyplot.show()
 temp = '1D_density_Us_%s_%s_%s_Nx_%.1i_J_%.3f_V_%.4f' %\
 		(case[0],case[1],case[2],Nx,J,V0)
 fig_OL1D.savefig("Figures_OL/fig_"+temp+".pdf")
+'''
+pyplot.plot(np.arange(Nx),abs(gauss)**2,'g*')
+pyplot.plot(np.arange(Nx),abs(sol_co)**2)
+pyplot.grid(axis='both')
+pyplot.xlabel('$x$')
+pyplot.ylabel('$|\Psi|^2$')
+pyplot.show()
+'''

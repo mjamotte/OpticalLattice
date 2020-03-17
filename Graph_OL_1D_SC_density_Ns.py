@@ -13,9 +13,9 @@ import Fun_OL
 
 ########################## Graphics for OPTICAL LATTICE ##########################
 J = 1
-N_s = [0,10,15,20,25] # N=0 actually means g = 0
-V0 = 0.5*1e-5
-Nx = 201
+N_s = [0,10,25,50] # N=0 actually means g = 0
+V0 = 0.5*1e-3
+Nx = 51
 case = ['SC','Harmonic','Isotropic']
 
 # Figure
@@ -63,9 +63,9 @@ for N in N_s:
 		ax2.plot(half_pos/sigma,n0[half_len:].real,'-r',label="$N = {}$".format(U))
 
 	if centered=='False':
-		ax2.plot(positions/sigma,Gauss**2/np.sum(Gauss**2),'-g')
-		ax2.plot(positions/sigma,dens,'.b')
-		ax2.plot(positions/sigma,n0.real,'-',label="$N = {}$".format(N))
+		ax2.plot(positions,Gauss**2/np.sum(Gauss**2),'-g')
+		ax2.plot(positions,dens,'.b')
+		ax2.plot(positions,n0.real,'-',label="$N = {}$".format(N))
 
 	#ax2.plot(np.arange(Nx),Trap/np.max(Trap))
 	ax2.legend(loc=1);
